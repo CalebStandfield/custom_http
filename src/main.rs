@@ -13,6 +13,14 @@ pub mod io {
     pub mod file;
 }
 
+use std::net::{TcpListener};
+
+const ADDRESS: &str = "127.0.0.1:8080";
+
+/// Entry point for the program
 fn main() {
-    println!("Hello, https!");
+    let listener = match TcpListener::bind(ADDRESS) {
+        Ok(listener) => listener,
+        Err(e) => panic!("Unable to bind to {}: {}", ADDRESS, e),
+    };
 }
