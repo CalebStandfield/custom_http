@@ -1,4 +1,5 @@
 use crate::io;
+use mime_guess::from_path;
 use std::io::{ErrorKind, Write};
 use std::net::TcpStream;
 
@@ -46,14 +47,17 @@ pub fn http_handler(stream: &TcpStream, response: String) {
                 ErrorKind::NotFound => {
                     // Should never error when reading the file here, because we pass in a hardcoded error path
                     let html_page = io::file::read_file(&ErrorPage::NotFound.path()).expect("_");
-                    write_response(&stream, &ErrorPage::NotFound.status(), &html_page);
+                    let response = create_http_response(&ErrorPage::NotFound.status(), &ErrorPage::NotFound.path(), &html_page);
+                    write_response(&stream, &response);
                     return;
                 }
                 ErrorKind::PermissionDenied => {
                     // Should never error when reading the file here, because we pass in a hardcoded error path
                     let html_page =
                         io::file::read_file(&ErrorPage::PermissionDenied.path()).expect("_");
-                    write_response(&stream, &ErrorPage::PermissionDenied.status(), &html_page);
+                    let response =
+                        create_http_response(&ErrorPage::PermissionDenied.status(), &ErrorPage::PermissionDenied.path(), &html_page);
+                    write_response(&stream, &response);
                     return;
                 }
                 _ => {
@@ -62,18 +66,17 @@ pub fn http_handler(stream: &TcpStream, response: String) {
                     // Should never error when reading the file here, because we pass in a hardcoded error path
                     let html_page =
                         io::file::read_file(&ErrorPage::InternalServerError.path()).expect("_");
-                    write_response(
-                        &stream,
-                        &ErrorPage::InternalServerError.status(),
-                        &html_page,
-                    );
+                    let response =
+                        create_http_response(&ErrorPage::InternalServerError.status(), &ErrorPage::InternalServerError.path() , &html_page);
+                    write_response(&stream, &response);
                     return;
                 }
             }
         }
     };
 
-    write_response(&stream, &status, &html_page);
+    let response = create_http_response(&status, &filename, &html_page);
+    write_response(&stream, &response);
 }
 
 fn status_filename(response: String) -> (String, String) {
@@ -104,10 +107,12 @@ fn status_filename(response: String) -> (String, String) {
     }
 }
 
-fn write_response(mut stream: &TcpStream, status: &String, html_page: &String) {
+fn create_http_response(status: &String, filename: &String, html_page: &String) -> String {
+    let mime = from_path(filename).first_or_octet_stream();
     let length = html_page.len();
+    format!("{status}\r\nContent-Length: {length}\r\nContent-Type: {mime}\r\n\r\n{html_page}")
+}
 
-    let response = format!("{status}\r\nContent-Length: {length}\r\n\r\n{html_page}");
-
+fn write_response(mut stream: &TcpStream, response: &String) {
     stream.write_all(response.as_bytes()).unwrap();
 }
