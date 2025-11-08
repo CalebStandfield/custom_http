@@ -41,14 +41,7 @@ fn main() {
 
 /// Handles a connection from a client.
 ///
-/// Writes the desired HTML page into the TcpStream.
-///
-/// # Behavior
-///
-/// If the contents of the filename cannot be read, the error will
-/// be logged into eprintln! Then write a new 500 Internal Server Error HTML page into the stream.
-/// This should most likely be changed to not log into eprintln!
-/// Such that we avoid leaking internal implementation to the user.
+/// Writes the desired page into the TcpStream.
 fn handle_connection(mut stream: TcpStream) {
     let buffer = BufReader::new(&mut stream);
     let request_line = buffer.lines().next().unwrap().unwrap();

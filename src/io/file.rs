@@ -1,5 +1,5 @@
 use std::fs;
 
-pub fn read_file(filename: &str) -> std::io::Result<String> {
-   fs::read_to_string(filename)
+pub fn read_file_bytes(filename: &str) -> std::io::Result<Vec<u8>> {
+    fs::read(filename)
 }
