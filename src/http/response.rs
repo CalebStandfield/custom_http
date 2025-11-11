@@ -222,7 +222,7 @@ pub fn http_handler(stream: &TcpStream, response: String) {
 /// - This function makes use of external helper functions such as
 ///   - `status_filename(response: String) -> (String, String)`: Determines the HTTP status
 ///     and corresponding file path.
-///   - `from_path(path: &str) -> Mime`: Determines the MIME type of a file based on its path.
+///   - `from_path(path: &str) -> Mime`: Determines the MIME type of file based on its path.
 ///   - `io::file::read_file_bytes(path: &str) -> Result<Vec<u8>, IoError>`: Reads file content
 ///     as a byte vector.
 ///   - `ErrorPage::InternalServerError`: Contains the status code and path for the internal server

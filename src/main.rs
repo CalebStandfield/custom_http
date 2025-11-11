@@ -29,13 +29,24 @@ fn main() {
     // However, the book used 4, so for now I will use 4 as well
     let thread_pool = thread_pool::ThreadPool::new(4);
 
-    for stream in listener.incoming() {
-        // Since .incoming() never returns a None I think .unwrap is okay for this.
-        let stream = stream.unwrap();
+    listener.set_nonblocking(true).expect("Unable to set nonblocking");
 
-        thread_pool.execute(|| {
-            handle_connection(stream);
-        });
+    for stream in listener.incoming() {
+
+        match stream {
+            Ok(stream) => {
+                thread_pool.execute(|| {
+                    handle_connection(stream);
+                });
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                // Sleeping for a second because I don't want too much CPU usage for
+                // this small program.
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+                continue;
+            }
+            Err(e) => eprintln!("Another error occurred: {}", e)
+        }
     }
 }
 
