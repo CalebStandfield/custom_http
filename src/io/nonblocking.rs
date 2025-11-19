@@ -1,4 +1,3 @@
-use crate::handle_connection;
 use crate::thread_pool::ThreadPool;
 use mio::net::{TcpListener, TcpStream};
 use mio::{Events, Interest, Poll, Token};
