@@ -56,5 +56,5 @@ fn main() {
 fn handle_connection(mut stream: TcpStream) {
     let buffer = BufReader::new(&mut stream);
     let request_line = buffer.lines().next().unwrap().unwrap();
-    http::response::http_handler(&stream, request_line);
+    let response = http::response::http_handler(request_line);
 }

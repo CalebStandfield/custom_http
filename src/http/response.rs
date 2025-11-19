@@ -181,9 +181,9 @@ enum Body {
 ///
 /// If the `write_response` function fails, the error will not be handled in this function.
 /// The caller of this function may want to log or handle any network-related errors outside of this context.
-pub fn http_handler(stream: &TcpStream, response: String) {
+pub fn http_handler(response: String) -> Vec<u8>{
     let http_response: HttpResponse = create_http_response(response);
-    write_response(&stream, http_response);
+    build_response(http_response)
 }
 
 /// Creates an HTTP response based on the given file path or error page response.
@@ -330,15 +330,15 @@ fn status_filename(response: String) -> (String, String) {
 /// - `stream`: The open `TcpStream` representing the client connection.
 /// - `http_response`: The HTTP response to send, including status,
 ///   headers, and body.
-fn write_response(mut stream: &TcpStream, http_response: HttpResponse) {
+fn build_response(http_response: HttpResponse) -> Vec<u8> {
     let status = http_response.status;
     let mime = http_response.content_type;
-    let (length, body_bytes): (usize, &[u8]) = match &http_response.body {
+    let (length, mut body_bytes): (usize, &[u8]) = match &http_response.body {
         Body::Text(text) => (text.len(), text.as_bytes()),
         Body::Binary(binary) => (binary.len(), binary),
     };
 
     let header = format!("{status}\r\nContent-Length: {length}\r\nContent-Type: {mime}\r\n\r\n");
-    stream.write_all(header.as_bytes()).unwrap();
-    stream.write_all(body_bytes).unwrap();
+    let mut body = body_bytes.to_vec();
+    header.as_bytes().to_vec().into_iter().chain(body.into_iter()).collect()
 }
