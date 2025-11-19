@@ -301,14 +301,21 @@ fn status_filename(response: String) -> (String, String) {
         )
     } else {
         let mut path = String::from(path);
-        path.push_str(".html");
+
+        path.insert_str(0, "public");
+
+        if Path::new(&path).extension().is_none() {
+            path.push_str(".html");
+        }
+
         if !Path::new(&path).exists() {
             return (
                 String::from(ErrorPage::NotFound.status()),
                 String::from(ErrorPage::NotFound.path()),
             );
         }
-        (String::from("HTTP/1.1 200 OK"), format!("public{}", path))
+
+        (String::from("HTTP/1.1 200 OK"), format!("{}", path))
     }
 }
 
