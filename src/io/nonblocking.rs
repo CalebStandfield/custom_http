@@ -80,7 +80,7 @@ impl Reactor {
                     let key = entry.key();
                     let token = Token(key + 1); // 0 is reserved for LISTENER
 
-                    // 3) Register this socket with poll
+                    // 3) Register this socket with 'poll'
                     self.poll.registry().register(
                         &mut entry.insert(conn).stream,
                         token,
@@ -99,101 +99,108 @@ impl Reactor {
 
         Ok(())
     }
-    fn handle_connection_event(&mut self, token: Token, event: &mio::event::Event) -> io::Result<()> {
+
+    fn handle_connection_event(
+        &mut self,
+        token: Token,
+        event: &mio::event::Event,
+    ) -> io::Result<()> {
         let idx = token.0 - 1;
 
         if event.is_readable() {
             if let Some(conn) = self.conns.get_mut(idx) {
-                handle_readable(conn)?;
-
-                if !conn.write_buffer.is_empty() {
-                    self.poll.registry().reregister(
-                        &mut conn.stream,
-                        token,
-                         // Set to WRITABLE if we have queued bytes to send
-                        Interest::WRITABLE,
-                    )?;
-                }
+                self.handle_readable(idx, token)?;
             }
         }
 
         if event.is_writable() {
             if let Some(conn) = self.conns.get_mut(idx) {
-                handle_writable(conn)?;
-
-                if conn.write_buffer.is_empty() {
-                    conn.state = State::Closed;
-                    // TODO: deregister and remove from slab
-                    // TODO: self.poll.registry().deregister(&mut conn.stream)?;
-                    // TODO: self.conns.remove(idx);
-                }
+                self.handle_writable(idx, token)?;
             }
         }
 
         Ok(())
     }
-}
 
-fn handle_writable(conn: &mut Connection) -> io::Result<()> {
-    while !conn.write_buffer.is_empty() {
-        let buf = &conn.write_buffer[..];
+    fn handle_writable(&mut self, idx: usize, token: Token) -> io::Result<()> {
+        let conn = match self.conns.get_mut(idx) {
+            Some(conn) => conn,
+            None => return Ok(()),
+        };
 
-        match conn.stream.write(buf) {
-            Ok(0) => {
-                conn.state = State::Closed;
-                break;
-            }
-            Ok(n) => {
-                conn.write_buffer.drain(..n);
-            }
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                break;
-            }
-            Err(e) => {
-                eprintln!("write error: {}", e);
-                conn.state = State::Closed;
-                break;
+        while !conn.write_buffer.is_empty() {
+            let buf = &conn.write_buffer[..];
+
+            match conn.stream.write(buf) {
+                Ok(0) => {
+                    conn.state = State::Closed;
+                    self.poll.registry().deregister(&mut conn.stream)?;
+                    self.conns.remove(idx);
+                    return Ok(());
+                }
+                Ok(n) => {
+                    conn.write_buffer.drain(..n);
+                }
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    break;
+                }
+                Err(e) => {
+                    eprintln!("write error: {}", e);
+                    conn.state = State::Closed;
+                    self.poll.registry().deregister(&mut conn.stream)?;
+                    self.conns.remove(idx);
+                    return Ok(());
+                }
             }
         }
+        Ok(())
     }
-    Ok(())
-}
 
-fn handle_readable(conn: &mut Connection) -> io::Result<()> {
-    let mut buf = [0u8; 4096];
+    fn handle_readable(&mut self, idx: usize, token: Token) -> io::Result<()> {
+        let conn = match self.conns.get_mut(idx) {
+            Some(conn) => conn,
+            None => return Ok(()),
+        };
 
-    loop {
-        match conn.stream.read(&mut buf) {
-            Ok(0) => {
-                conn.state = State::Closed;
-                break;
-            }
-            Ok(n) => {
-                conn.read_buffer.extend_from_slice(&buf[..n]);
-            }
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                break;
-            }
-            Err(e) => {
-                eprintln!("read error: {}", e);
-                conn.state = State::Closed;
-                break;
+        let mut buf = [0u8; 4096];
+
+        loop {
+            match conn.stream.read(&mut buf) {
+                Ok(0) => {
+                    conn.state = State::Closed;
+                    self.poll.registry().deregister(&mut conn.stream)?;
+                    self.conns.remove(idx);
+                    return Ok(());
+                }
+                Ok(n) => {
+                    conn.read_buffer.extend_from_slice(&buf[..n]);
+                }
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    break;
+                }
+                Err(e) => {
+                    eprintln!("read error: {}", e);
+                    conn.state = State::Closed;
+                    self.poll.registry().deregister(&mut conn.stream)?;
+                    self.conns.remove(idx);
+                    return Ok(());
+                }
             }
         }
-    }
 
-    // TEMP TEST
-    if !conn.read_buffer.is_empty() && conn.write_buffer.is_empty() {
-        let body = b"Hello from mio\r\n";
-        let header = format!(
-            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: text/plain\r\n\r\n",
-            body.len()
-        );
-        conn.write_buffer.extend_from_slice(header.as_bytes());
-        conn.write_buffer.extend_from_slice(body);
-    }
+        // TEMP TEST
+        if !conn.read_buffer.is_empty() && conn.write_buffer.is_empty() {
+            let body = b"Hello from mio\r\n";
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: text/plain\r\n\r\n",
+                body.len()
+            );
+            conn.write_buffer.extend_from_slice(header.as_bytes());
+            conn.write_buffer.extend_from_slice(body);
+        }
 
-    Ok(())
+        Ok(())
+    }
 }
 
 pub fn run(addr: &str) -> io::Result<()> {
